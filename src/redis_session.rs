@@ -10,8 +10,7 @@ pub struct RedisSessionStore {
 
 #[derive(Serialize, Deserialize)]
 pub struct Session {
-    sid: String,
-    pub(crate) credentials: String,
+    pub credentials: String,
 }
 
 #[derive(Debug)]
@@ -51,10 +50,10 @@ impl RedisSessionStore {
         }
     }
     #[cfg(test)]
-    async fn set(&self, session: Session) -> Result<(), MyError> {
+    async fn set(&self, sid: &str, session: Session) -> Result<(), MyError> {
         let session_str = serde_json::to_string(&session)?;
         let mut connection = self.connection().await?;
-        connection.set(session.sid, session_str).await?;
+        connection.set(sid, session_str).await?;
         Ok(())
     }
     pub fn new(connection_info: impl IntoConnectionInfo) -> RedisResult<Self> {
@@ -63,6 +62,7 @@ impl RedisSessionStore {
     async fn connection(&self) -> RedisResult<Connection> {
         self.client.get_async_connection().await
     }
+    #[cfg(test)]
     async fn clear_store(&self, keys: &[&str]) -> Result<(), MyError> {
         let mut connection = self.connection().await?;
         for key in keys {
@@ -84,11 +84,10 @@ mod test {
     #[tokio::test]
     async fn get_session() {
         let store = create_store().await;
-        store.set(Session {sid: String::from("sid"), credentials: String::from("credentials") }).await.unwrap();
+        store.set("sid", Session {credentials: String::from("credentials") }).await.unwrap();
 
         let session = store.get(String::from("sid")).await.unwrap().unwrap();
 
-        assert_eq!(session.sid, "sid");
         assert_eq!(session.credentials, "credentials");
     }
 

@@ -1,5 +1,6 @@
 use cookie::Cookie;
 
+
 pub(crate) fn find_from_header<'a>(cookie_header: &'a str, name: &'a str) -> Option<Cookie<'a>> {
     for pair in cookie_header.split(';') {
         if let Ok(cookie) = Cookie::parse(String::from(pair)) {
