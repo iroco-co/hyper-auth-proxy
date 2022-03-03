@@ -26,3 +26,9 @@ sha2 = "0.10"
 jwt = "0.16"
 cookie = "0.16"
 futures = "0.3"
+
+[dev-dependencies]
+tokio-test = "*"
+serial_test = "*"
+test-context = "*"
+async-trait = "0.1"
