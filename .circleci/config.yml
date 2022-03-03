@@ -4,6 +4,8 @@ jobs:
   build:
     docker:
       - image: cimg/rust:1.59.0
+      - image: redis:4.0.1-alpine
+        name: redis
     steps:
       - checkout
       - run: cargo --version
