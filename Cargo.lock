@@ -394,6 +394,7 @@ dependencies = [
 [[package]]
 name = "hyper-reverse-proxy"
 version = "0.5.0"
+source = "git+https://github.com/iroco-co/hyper-reverse-proxy#fa004550c264249327ca946c15fb447983e673ab"
 dependencies = [
  "hyper",
  "lazy_static",

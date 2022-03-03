@@ -17,7 +17,7 @@ features = ["aio", "tokio-comp"]
 [dependencies]
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive", "std"] }
-hyper-reverse-proxy = { path = "../hyper-reverse-proxy" }
+hyper-reverse-proxy = { git = "https://github.com/iroco-co/hyper-reverse-proxy" }
 hyper = { version = "0.14", features = ["full"] }
 tokio = { version = "1", features = ["full"] }
 hmac = "0.12"
