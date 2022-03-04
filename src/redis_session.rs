@@ -49,8 +49,7 @@ impl RedisSessionStore {
             None => Ok(None)
         }
     }
-    #[cfg(test)]
-    async fn set(&self, sid: &str, session: Session) -> Result<(), MyError> {
+    pub async fn set(&self, sid: &str, session: Session) -> Result<(), MyError> {
         let session_str = serde_json::to_string(&session)?;
         let mut connection = self.connection().await?;
         connection.set(sid, session_str).await?;
@@ -62,8 +61,7 @@ impl RedisSessionStore {
     async fn connection(&self) -> RedisResult<Connection> {
         self.client.get_async_connection().await
     }
-    #[cfg(test)]
-    async fn clear_store(&self, keys: &[&str]) -> Result<(), MyError> {
+    pub async fn clear_store(&self, keys: &[&str]) -> Result<(), MyError> {
         let mut connection = self.connection().await?;
         for key in keys {
             connection.del(key).await?
