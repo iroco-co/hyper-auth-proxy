@@ -55,7 +55,7 @@ pub struct SessionToken {
     pub exp: i64
 }
 
-async fn handle(client_ip: IpAddr, req: Request<Body>, store: RedisSessionStore, config: Arc<ProxyConfig>) -> Result<Response<Body>, Infallible> {
+async fn handle(client_ip: IpAddr, mut req: Request<Body>, store: RedisSessionStore, config: Arc<ProxyConfig>) -> Result<Response<Body>, Infallible> {
     if let Some(cookie_header) = req.headers().get("Cookies") {
         if let Ok(cookie_header_str) = cookie_header.to_str() {
             if let Some(auth_cookie) = cookies::find_from_header(cookie_header_str, "Authorization") {
@@ -69,7 +69,8 @@ async fn handle(client_ip: IpAddr, req: Request<Body>, store: RedisSessionStore,
                     let key: Hmac<Sha512> = Hmac::new_from_slice(config.key.as_bytes()).unwrap();
                     if let Ok(token_checked) = VerifyWithKey::verify_with_key(stripped, &key) {
                         let token: Token<Header, SessionToken, _> = token_checked;
-                        if let Ok(Some(_session)) = store.get(token.claims().sid.to_string()).await {
+                        if let Ok(Some(session)) = store.get(token.claims().sid.to_string()).await {
+                            req.headers_mut().insert("Authorization", format!("Basic {}", session.credentials).parse().unwrap());
                             return match hyper_reverse_proxy::call(client_ip, config.back_uri.as_str(), req).await {
                                 Ok(response) => { Ok(response) }
                                 Err(_error) => {
@@ -78,7 +79,6 @@ async fn handle(client_ip: IpAddr, req: Request<Body>, store: RedisSessionStore,
                             };
                         }
                     }
-
                 }
             }
         }
@@ -103,7 +103,6 @@ pub async fn run_service(config: ProxyConfig, rx: Receiver<()>) -> impl Future<O
 #[cfg(test)]
 mod test {
     use crate::ProxyConfig;
-    use std::net::SocketAddr;
 
     #[test]
     fn build_from_uri() {

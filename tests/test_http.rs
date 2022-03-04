@@ -3,7 +3,7 @@ use base64::encode;
 use chrono::{Duration, Utc};
 use hmac::Hmac;
 use tokio::sync::oneshot::Sender;
-use hyper::{Body, Client, Method, Request, Uri, StatusCode};
+use hyper::{Body, Client, Method, Request, Uri, StatusCode, HeaderMap};
 use jwt::{AlgorithmType, SignWithKey, Token};
 use jwt::header::PrecomputedAlgorithmOnlyHeader;
 use test_context::{AsyncTestContext, test_context};
@@ -128,8 +128,10 @@ async fn test_get_with_auth_cookie_with_jwt_token_without_redis_session_returns_
 #[serial]
 async fn test_get_with_auth_cookie_with_jwt_token_and_redis_session_sends_request_to_back(ctx: &mut ProxyTestContext) {
     let b64credentials = base64::encode("foo:bar").to_string();
+    let mut headers = HeaderMap::new();
+    headers.append("Authorization", format!("Basic {}", b64credentials).parse().unwrap());
+    ctx.http_back.add(HandlerBuilder::new("/back").headers(headers).status_code(StatusCode::OK).build());
     ctx.redis.set("sid", Session { credentials: b64credentials.clone() }).await.unwrap();
-    ctx.http_back.add(HandlerBuilder::new("/back").status_code(StatusCode::OK).build());
 
     let req = Request::builder()
         .method(Method::GET)
