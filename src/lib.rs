@@ -55,7 +55,7 @@ pub struct SessionToken {
     pub exp: i64
 }
 
-async fn handle(client_ip: IpAddr, mut req: Request<Body>, store: RedisSessionStore, config: Arc<ProxyConfig>) -> Result<Response<Body>, Infallible> {
+async fn handle(client_ip: IpAddr, mut req: Request<Body>, store: Arc<RedisSessionStore>, config: Arc<ProxyConfig>) -> Result<Response<Body>, Infallible> {
     if let Some(cookie_header) = req.headers().get("Cookies") {
         if let Ok(cookie_header_str) = cookie_header.to_str() {
             if let Some(auth_cookie) = cookies::find_from_header(cookie_header_str, "Authorization") {
@@ -89,12 +89,13 @@ async fn handle(client_ip: IpAddr, mut req: Request<Body>, store: RedisSessionSt
 pub async fn run_service(config: ProxyConfig, rx: Receiver<()>) -> impl Future<Output = Result<(), hyper::Error>> {
     let cloned_config = config.clone();
     let shared_config = Arc::new(config);
+    let shared_store = Arc::new(RedisSessionStore::new(shared_config.redis_uri.to_owned()).unwrap());
     let make_svc = make_service_fn(move |conn: &AddrStream| {
         let remote_addr = conn.remote_addr().ip();
         let config_capture = shared_config.clone();
-        let store = RedisSessionStore::new(shared_config.redis_uri.to_owned()).unwrap();
+        let store_capture = shared_store.clone();
         async move {
-            Ok::<_, Infallible>(service_fn(move |req| handle(remote_addr, req, store.clone(), config_capture.clone())))
+            Ok::<_, Infallible>(service_fn(move |req| handle(remote_addr, req, store_capture.clone(), config_capture.clone())))
         }
     });
     Server::bind(&cloned_config.address).serve(make_svc).with_graceful_shutdown(async {rx.await.ok();})
