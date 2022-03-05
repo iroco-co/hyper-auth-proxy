@@ -14,25 +14,29 @@ use tokio::sync::oneshot::Receiver;
 
 mod cookies;
 pub mod redis_session;
+pub mod errors;
 
-use crate::redis_session::RedisSessionStore;
+use crate::redis_session::{RedisSessionStore};
 use std::borrow::Borrow;
 use std::sync::Arc;
+use crate::errors::AuthProxyError;
+use cookie::Cookie;
+use hyper::header::HeaderValue;
 
 static DOUBLE_QUOTES: &str = "\"";
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProxyConfig {
     pub key: String,
-    pub back_uri : String,
+    pub back_uri: String,
     pub redis_uri: String,
     pub address: SocketAddr
 }
 
 impl ProxyConfig {
     pub fn from_address(address_str: &str) -> ProxyConfig {
-        let Self {key, back_uri, redis_uri, address: _ } = ProxyConfig::default();
-        Self {key, back_uri, redis_uri, address: address_str.parse().unwrap()}
+        let Self { key, back_uri, redis_uri, address: _ } = ProxyConfig::default();
+        Self { key, back_uri, redis_uri, address: address_str.parse().unwrap() }
     }
 }
 
@@ -55,38 +59,61 @@ pub struct SessionToken {
     pub exp: i64
 }
 
+fn decode_token(token_str_from_header: String, key: Hmac<Sha512>) -> Result<SessionToken, AuthProxyError> {
+    let token_bytes = &decode(token_str_from_header)?;
+    let token_str = String::from_utf8_lossy(token_bytes).to_string();
+    let stripped = match token_str.starts_with("\"") {
+        true => token_str.strip_prefix(DOUBLE_QUOTES).unwrap().strip_suffix(DOUBLE_QUOTES).unwrap(),
+        false => token_str.borrow()
+    };
+    let token_checked: Token<Header, SessionToken, _> = VerifyWithKey::verify_with_key(stripped, &key)?;
+    Ok(SessionToken {
+        exp: token_checked.claims().exp,
+        iat: token_checked.claims().iat,
+        sid: token_checked.claims().sid.clone(),
+        sub: token_checked.claims().sub.clone()
+    })
+}
+
+fn get_cookies(req: &Request<Body>) -> Result<&HeaderValue, AuthProxyError> {
+    match req.headers().get("Cookies") {
+        Some(header) => Ok(header),
+        None => Err(AuthProxyError::NoCookiesHeader())
+    }
+}
+
+fn get_auth_cookie(req: &Request<Body>) -> Result<Cookie, AuthProxyError> {
+    let cookies_header = get_cookies(req)?;
+    let cookie_header_str = cookies_header.to_str()?;
+    match cookies::find_from_header(cookie_header_str, "Authorization") {
+        Some(cookie) => Ok(cookie),
+        None => Err(AuthProxyError::NoAuthorizationCookie())
+    }
+}
+
+fn set_simple_auth(req: &mut Request<Body>, credentials: &str) {
+    req.headers_mut().insert("Authorization", format!("Basic {}", credentials).parse().unwrap());
+}
+
 async fn handle(client_ip: IpAddr, mut req: Request<Body>, store: Arc<RedisSessionStore>, config: Arc<ProxyConfig>) -> Result<Response<Body>, Infallible> {
-    if let Some(cookie_header) = req.headers().get("Cookies") {
-        if let Ok(cookie_header_str) = cookie_header.to_str() {
-            if let Some(auth_cookie) = cookies::find_from_header(cookie_header_str, "Authorization") {
-                let token_str_base64 = auth_cookie.value();
-                if let Ok(token) = &decode(token_str_base64) {
-                    let token_str = String::from_utf8_lossy(token).to_string();
-                    let stripped = match token_str.starts_with("\"") {
-                        true => token_str.strip_prefix(DOUBLE_QUOTES).unwrap().strip_suffix(DOUBLE_QUOTES).unwrap(),
-                        false => token_str.borrow()
-                    };
-                    let key: Hmac<Sha512> = Hmac::new_from_slice(config.key.as_bytes()).unwrap();
-                    if let Ok(token_checked) = VerifyWithKey::verify_with_key(stripped, &key) {
-                        let token: Token<Header, SessionToken, _> = token_checked;
-                        if let Ok(Some(session)) = store.get(token.claims().sid.to_string()).await {
-                            req.headers_mut().insert("Authorization", format!("Basic {}", session.credentials).parse().unwrap());
-                            return match hyper_reverse_proxy::call(client_ip, config.back_uri.as_str(), req).await {
-                                Ok(response) => { Ok(response) }
-                                Err(_error) => {
-                                    Ok(Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty()).unwrap())
-                                }
-                            };
-                        }
+    if let Ok(auth_cookie) = get_auth_cookie(&req) {
+        let key: Hmac<Sha512> = Hmac::new_from_slice(config.key.as_bytes()).unwrap();
+        if let Ok(session_token) = decode_token(auth_cookie.value().to_string(), key) {
+            if let Ok(Some(session)) = store.get(session_token.sid).await {
+                set_simple_auth(&mut req, session.credentials.as_str());
+                return match hyper_reverse_proxy::call(client_ip, config.back_uri.as_str(), req).await {
+                    Ok(response) => { Ok(response) }
+                    Err(_error) => {
+                        Ok(Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty()).unwrap())
                     }
-                }
+                };
             }
         }
     }
     Ok(Response::builder().status(StatusCode::UNAUTHORIZED).body(Body::empty()).unwrap())
 }
 
-pub async fn run_service(config: ProxyConfig, rx: Receiver<()>) -> impl Future<Output = Result<(), hyper::Error>> {
+pub async fn run_service(config: ProxyConfig, rx: Receiver<()>) -> impl Future<Output=Result<(), hyper::Error>> {
     let cloned_config = config.clone();
     let shared_config = Arc::new(config);
     let shared_store = Arc::new(RedisSessionStore::new(shared_config.redis_uri.to_owned()).unwrap());
@@ -98,7 +125,7 @@ pub async fn run_service(config: ProxyConfig, rx: Receiver<()>) -> impl Future<O
             Ok::<_, Infallible>(service_fn(move |req| handle(remote_addr, req, store_capture.clone(), config_capture.clone())))
         }
     });
-    Server::bind(&cloned_config.address).serve(make_svc).with_graceful_shutdown(async {rx.await.ok();})
+    Server::bind(&cloned_config.address).serve(make_svc).with_graceful_shutdown(async { rx.await.ok(); })
 }
 
 #[cfg(test)]
