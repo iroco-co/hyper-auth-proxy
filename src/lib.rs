@@ -20,8 +20,7 @@ use crate::redis_session::{RedisSessionStore};
 use std::borrow::Borrow;
 use std::sync::Arc;
 use crate::errors::AuthProxyError;
-use cookie::Cookie;
-use hyper::header::HeaderValue;
+use crate::cookies::get_auth_cookie;
 
 static DOUBLE_QUOTES: &str = "\"";
 
@@ -73,22 +72,6 @@ fn decode_token(token_str_from_header: String, key: Hmac<Sha512>) -> Result<Sess
         sid: token_checked.claims().sid.clone(),
         sub: token_checked.claims().sub.clone()
     })
-}
-
-fn get_cookies(req: &Request<Body>) -> Result<&HeaderValue, AuthProxyError> {
-    match req.headers().get("Cookies") {
-        Some(header) => Ok(header),
-        None => Err(AuthProxyError::NoCookiesHeader())
-    }
-}
-
-fn get_auth_cookie(req: &Request<Body>) -> Result<Cookie, AuthProxyError> {
-    let cookies_header = get_cookies(req)?;
-    let cookie_header_str = cookies_header.to_str()?;
-    match cookies::find_from_header(cookie_header_str, "Authorization") {
-        Some(cookie) => Ok(cookie),
-        None => Err(AuthProxyError::NoAuthorizationCookie())
-    }
 }
 
 fn set_simple_auth(req: &mut Request<Body>, credentials: &str) {
