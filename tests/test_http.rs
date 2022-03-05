@@ -1,20 +1,23 @@
 use std::collections::BTreeMap;
+
 use base64::encode;
 use chrono::{Duration, Utc};
 use hmac::Hmac;
-use tokio::sync::oneshot::Sender;
-use hyper::{Body, Client, Method, Request, Uri, StatusCode, HeaderMap};
+use hyper::{Body, Client, HeaderMap, Method, Request, StatusCode, Uri};
 use jwt::{AlgorithmType, SignWithKey, Token};
 use jwt::header::PrecomputedAlgorithmOnlyHeader;
-use test_context::{AsyncTestContext, test_context};
-use tokio::task::JoinHandle;
-use auth_proxy::{run_service, SessionToken, ProxyConfig};
 use serial_test::serial;
-use sha2::digest::KeyInit;
 use sha2::{Sha256, Sha512};
-use tokiotest_httpserver::HttpTestContext;
-use auth_proxy::redis_session::{RedisSessionStore, Session};
+use sha2::digest::KeyInit;
+use test_context::{AsyncTestContext, test_context};
+use tokio::sync::oneshot::Sender;
+use tokio::task::JoinHandle;
 use tokiotest_httpserver::handler::HandlerBuilder;
+use tokiotest_httpserver::HttpTestContext;
+
+use auth_proxy::{ProxyConfig, run_service, SessionToken};
+use auth_proxy::redis_session::{RedisSessionStore, Session};
+
 
 struct ProxyTestContext {
     sender: Sender<()>,

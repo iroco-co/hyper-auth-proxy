@@ -1,29 +1,30 @@
 #[macro_use]
 extern crate log;
 
+use std::borrow::Borrow;
 use std::convert::Infallible;
 use std::future::Future;
 use std::net::{IpAddr, SocketAddr};
+use std::sync::Arc;
+
 use base64::decode;
 use hmac::Hmac;
 use hyper::{Body, Request, Response, Server, StatusCode};
-use serde::{Deserialize, Serialize};
 use hyper::server::conn::AddrStream;
 use hyper::service::{make_service_fn, service_fn};
 use jwt::{Header, Token, VerifyWithKey};
+use serde::{Deserialize, Serialize};
 use sha2::digest::KeyInit;
 use sha2::Sha512;
 use tokio::sync::oneshot::Receiver;
 
+use crate::cookies::get_auth_cookie;
+use crate::errors::AuthProxyError;
+use crate::redis_session::RedisSessionStore;
+
 mod cookies;
 pub mod redis_session;
 pub mod errors;
-
-use crate::redis_session::{RedisSessionStore};
-use std::borrow::Borrow;
-use std::sync::Arc;
-use crate::errors::AuthProxyError;
-use crate::cookies::get_auth_cookie;
 
 static DOUBLE_QUOTES: &str = "\"";
 
@@ -77,11 +78,12 @@ fn decode_token(token_str_from_header: String, key: Hmac<Sha512>) -> Result<Sess
     })
 }
 
-fn set_basic_auth(req: &mut Request<Body>, credentials: &str) {
+fn set_basic_auth(req: &mut Request<Body>, credentials: String) {
     req.headers_mut().insert("Authorization", format!("Basic {}", credentials).parse().unwrap());
 }
 
-async fn handle(client_ip: IpAddr, mut req: Request<Body>, store: Arc<RedisSessionStore>, config: Arc<ProxyConfig>) -> Result<Response<Body>, Infallible> {
+async fn handle(client_ip: IpAddr, mut req: Request<Body>, store: Arc<RedisSessionStore>,
+                config: Arc<ProxyConfig>, decode_credentials: fn(&str) -> String) -> Result<Response<Body>, Infallible> {
     match get_auth_cookie(&req) {
         Ok(auth_cookie) => {
             let key: Hmac<Sha512> = Hmac::new_from_slice(config.key.as_bytes()).unwrap();
@@ -89,7 +91,7 @@ async fn handle(client_ip: IpAddr, mut req: Request<Body>, store: Arc<RedisSessi
                 Ok(session_token) => {
                     match store.get(session_token.sid.as_str()).await {
                         Ok(Some(session)) => {
-                            set_basic_auth(&mut req, session.credentials.as_str());
+                            set_basic_auth(&mut req, decode_credentials(session.credentials.as_str()));
                             match hyper_reverse_proxy::call(client_ip, config.back_uri.as_str(), req).await {
                                 Ok(response) => { Ok(response) }
                                 Err(_error) => {
@@ -120,7 +122,15 @@ async fn handle(client_ip: IpAddr, mut req: Request<Body>, store: Arc<RedisSessi
     }
 }
 
+fn identity_fn_credentials(credentials: &str) -> String {
+    String::from(credentials)
+}
+
 pub async fn run_service(config: ProxyConfig, rx: Receiver<()>) -> impl Future<Output=Result<(), hyper::Error>> {
+    run_service_with_decoder(config, rx, identity_fn_credentials).await
+}
+
+pub async fn run_service_with_decoder(config: ProxyConfig, rx: Receiver<()>, decode_credentials: fn(&str) -> String) -> impl Future<Output=Result<(), hyper::Error>> {
     let cloned_config = config.clone();
     let shared_config = Arc::new(config);
     let shared_store = Arc::new(RedisSessionStore::new(shared_config.redis_uri.to_owned()).unwrap());
@@ -129,7 +139,7 @@ pub async fn run_service(config: ProxyConfig, rx: Receiver<()>) -> impl Future<O
         let config_capture = shared_config.clone();
         let store_capture = shared_store.clone();
         async move {
-            Ok::<_, Infallible>(service_fn(move |req| handle(remote_addr, req, store_capture.clone(), config_capture.clone())))
+            Ok::<_, Infallible>(service_fn(move |req| handle(remote_addr, req, store_capture.clone(), config_capture.clone(), decode_credentials)))
         }
     });
     Server::bind(&cloned_config.address).serve(make_svc).with_graceful_shutdown(async { rx.await.ok(); })
