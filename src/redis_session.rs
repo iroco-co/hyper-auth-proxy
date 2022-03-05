@@ -14,34 +14,44 @@ pub struct Session {
 }
 
 #[derive(Debug)]
-pub enum MyError {
+pub enum StoreError {
     Io(io::Error),
     Json(serde_json::Error),
     Redis(RedisError)
 }
 
-impl From<serde_json::Error> for MyError {
-    fn from(err: serde_json::Error) -> MyError {
+impl From<serde_json::Error> for StoreError {
+    fn from(err: serde_json::Error) -> StoreError {
         use serde_json::error::Category;
         match err.classify() {
             Category::Io => {
-                MyError::Io(err.into())
+                StoreError::Io(err.into())
             }
             Category::Syntax | Category::Data | Category::Eof => {
-                MyError::Json(err)
+                StoreError::Json(err)
             }
         }
     }
 }
 
-impl From<RedisError> for MyError {
+impl std::fmt::Display for StoreError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            StoreError::Io(ioe) => write!(f, "io error ({})", ioe),
+            StoreError::Json(serde) => write!(f, "json deserialization error ({})", serde),
+            StoreError::Redis(re) => write!(f, "redis error ({})", re),
+        }
+    }
+}
+
+impl From<RedisError> for StoreError {
     fn from(err: RedisError) -> Self {
-        MyError::Redis(err)
+        StoreError::Redis(err)
     }
 }
 
 impl RedisSessionStore {
-    pub(crate) async fn get(&self, sid: String) -> Result<Option<Session>, MyError> {
+    pub(crate) async fn get(&self, sid: &str) -> Result<Option<Session>, StoreError> {
         let mut connection = self.connection().await?;
         let session_str: Option<String> = connection.get(sid).await?;
         match session_str {
@@ -49,7 +59,7 @@ impl RedisSessionStore {
             None => Ok(None)
         }
     }
-    pub async fn set(&self, sid: &str, session: Session) -> Result<(), MyError> {
+    pub async fn set(&self, sid: &str, session: Session) -> Result<(), StoreError> {
         let session_str = serde_json::to_string(&session)?;
         let mut connection = self.connection().await?;
         connection.set(sid, session_str).await?;
@@ -61,7 +71,7 @@ impl RedisSessionStore {
     async fn connection(&self) -> RedisResult<Connection> {
         self.client.get_async_connection().await
     }
-    pub async fn clear_store(&self, keys: &[&str]) -> Result<(), MyError> {
+    pub async fn clear_store(&self, keys: &[&str]) -> Result<(), StoreError> {
         let mut connection = self.connection().await?;
         for key in keys {
             connection.del(key).await?
@@ -76,7 +86,7 @@ mod test {
 
     #[tokio::test]
     async fn get_unknown_key() {
-        assert!(create_store().await.get(String::from("unknown")).await.unwrap().is_none())
+        assert!(create_store().await.get("unknown").await.unwrap().is_none())
     }
 
     #[tokio::test]
@@ -84,7 +94,7 @@ mod test {
         let store = create_store().await;
         store.set("sid", Session {credentials: String::from("credentials") }).await.unwrap();
 
-        let session = store.get(String::from("sid")).await.unwrap().unwrap();
+        let session = store.get("sid").await.unwrap().unwrap();
 
         assert_eq!(session.credentials, "credentials");
     }

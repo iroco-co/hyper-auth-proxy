@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate log;
+
 use std::convert::Infallible;
 use std::future::Future;
 use std::net::{IpAddr, SocketAddr};
@@ -29,7 +32,7 @@ pub struct ProxyConfig {
     pub key: String,
     pub back_uri: String,
     pub redis_uri: String,
-    pub address: SocketAddr
+    pub address: SocketAddr,
 }
 
 impl ProxyConfig {
@@ -45,7 +48,7 @@ impl Default for ProxyConfig {
             key: "testsecretpourlestests".to_string(),
             back_uri: "http://127.0.0.1:5000".to_string(),
             redis_uri: "redis://redis".to_string(),
-            address: "127.0.0.1:3000".parse().unwrap()
+            address: "127.0.0.1:3000".parse().unwrap(),
         }
     }
 }
@@ -55,7 +58,7 @@ pub struct SessionToken {
     pub sub: String,
     pub sid: String,
     pub iat: i64,
-    pub exp: i64
+    pub exp: i64,
 }
 
 fn decode_token(token_str_from_header: String, key: Hmac<Sha512>) -> Result<SessionToken, AuthProxyError> {
@@ -70,30 +73,51 @@ fn decode_token(token_str_from_header: String, key: Hmac<Sha512>) -> Result<Sess
         exp: token_checked.claims().exp,
         iat: token_checked.claims().iat,
         sid: token_checked.claims().sid.clone(),
-        sub: token_checked.claims().sub.clone()
+        sub: token_checked.claims().sub.clone(),
     })
 }
 
-fn set_simple_auth(req: &mut Request<Body>, credentials: &str) {
+fn set_basic_auth(req: &mut Request<Body>, credentials: &str) {
     req.headers_mut().insert("Authorization", format!("Basic {}", credentials).parse().unwrap());
 }
 
 async fn handle(client_ip: IpAddr, mut req: Request<Body>, store: Arc<RedisSessionStore>, config: Arc<ProxyConfig>) -> Result<Response<Body>, Infallible> {
-    if let Ok(auth_cookie) = get_auth_cookie(&req) {
-        let key: Hmac<Sha512> = Hmac::new_from_slice(config.key.as_bytes()).unwrap();
-        if let Ok(session_token) = decode_token(auth_cookie.value().to_string(), key) {
-            if let Ok(Some(session)) = store.get(session_token.sid).await {
-                set_simple_auth(&mut req, session.credentials.as_str());
-                return match hyper_reverse_proxy::call(client_ip, config.back_uri.as_str(), req).await {
-                    Ok(response) => { Ok(response) }
-                    Err(_error) => {
-                        Ok(Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty()).unwrap())
+    match get_auth_cookie(&req) {
+        Ok(auth_cookie) => {
+            let key: Hmac<Sha512> = Hmac::new_from_slice(config.key.as_bytes()).unwrap();
+            match decode_token(auth_cookie.value().to_string(), key) {
+                Ok(session_token) => {
+                    match store.get(session_token.sid.as_str()).await {
+                        Ok(Some(session)) => {
+                            set_basic_auth(&mut req, session.credentials.as_str());
+                            match hyper_reverse_proxy::call(client_ip, config.back_uri.as_str(), req).await {
+                                Ok(response) => { Ok(response) }
+                                Err(_error) => {
+                                    Ok(Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty()).unwrap())
+                                }
+                            }
+                        }
+                        Ok(None) => {
+                            debug!("no session {} found", session_token.sid);
+                            Ok(Response::builder().status(StatusCode::UNAUTHORIZED).body(Body::empty()).unwrap())
+                        }
+                        Err(e) => {
+                            debug!("err getting session from redis: {}", e);
+                            Ok(Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty()).unwrap())
+                        }
                     }
-                };
+                }
+                Err(e) => {
+                    debug!("cannot decode jwt token: {}", e);
+                    Ok(Response::builder().status(StatusCode::UNAUTHORIZED).body(Body::empty()).unwrap())
+                }
             }
         }
+        Err(e) => {
+            debug!("cannot find auth cookie: {}", e);
+            Ok(Response::builder().status(StatusCode::UNAUTHORIZED).body(Body::empty()).unwrap())
+        }
     }
-    Ok(Response::builder().status(StatusCode::UNAUTHORIZED).body(Body::empty()).unwrap())
 }
 
 pub async fn run_service(config: ProxyConfig, rx: Receiver<()>) -> impl Future<Output=Result<(), hyper::Error>> {
