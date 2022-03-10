@@ -1,8 +1,9 @@
 //!
-//! Little auth proxy that can be used to add Basic auth header for a backend service
-//! that needs basic auth without having to send credentials base64 encoded on the web.
+//! Little auth proxy based on [hyper-reverse-proxy](https://github.com/felipenoris/hyper-reverse-proxy)
+//! that can be used to add Basic auth header for a backend service
+//! without having to send credentials base64 encoded on the web.
 //!
-//! It will use JWK token key sid field to seek for the credentials in a Redis instance.
+//! It will use JWK token key `sid` field to seek for the credentials in a Redis instance.
 //! The credentials are stored in json :
 //!
 //! ```json
@@ -11,7 +12,7 @@
 //!
 //! They can be used "as is" or the credentials can be encoded (for example with AES).
 //!
-//! In that case, the proxy will make a request with `Authorization` header :
+//! Without encoded credentials, the proxy will make a request with `Authorization` header :
 //! ```bash
 //! Authorization: Bearer dXNlcjp0ZXN0
 //! ```
