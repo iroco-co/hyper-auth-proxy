@@ -1,42 +1,21 @@
 use base64::DecodeError;
 use jwt::Error as JwtError;
 use hyper::header::ToStrError;
+use thiserror::Error;
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum AuthProxyError {
-    DecodeError(DecodeError),
-    JwtError(JwtError),
+    #[error("cannot decode base64 ({0})")]
+    B64DecodeError(#[from] DecodeError),
+    #[error("cannot decode jwt token ({0})")]
+    JwtError(#[from] JwtError),
+    #[error("no cookies header")]
     NoCookiesHeader(),
+    #[error("no auth cookie")]
     NoAuthorizationCookie(),
-    StrError(ToStrError)
+    #[error("string error ({0})")]
+    StrError(#[from] ToStrError),
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
 }
 
-impl std::fmt::Display for AuthProxyError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            AuthProxyError::DecodeError(de) => write!(f, "cannot decode base64 ({})", de),
-            AuthProxyError::JwtError(jwte) => write!(f, "cannot decode jwt token ({})", jwte),
-            AuthProxyError::NoCookiesHeader() => write!(f, "no cookies header"),
-            AuthProxyError::NoAuthorizationCookie() => write!(f, "no auth cookie"),
-            AuthProxyError::StrError(str_err) => write!(f, "string error ({})", str_err)
-        }
-    }
-}
-
-impl From<DecodeError> for AuthProxyError {
-    fn from(err: DecodeError) -> AuthProxyError {
-        AuthProxyError::DecodeError(err)
-    }
-}
-
-impl From<ToStrError> for AuthProxyError {
-    fn from(err: ToStrError) -> AuthProxyError {
-        AuthProxyError::StrError(err)
-    }
-}
-
-impl From<JwtError> for AuthProxyError {
-    fn from(err: JwtError) -> AuthProxyError {
-        AuthProxyError::JwtError(err)
-    }
-}
