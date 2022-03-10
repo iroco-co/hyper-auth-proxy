@@ -2,6 +2,7 @@ use std::io;
 use redis::{Client, AsyncCommands, IntoConnectionInfo, RedisError, RedisResult};
 use redis::aio::Connection;
 use serde::{Serialize, Deserialize};
+use thiserror::Error;
 
 #[derive(Clone, Debug)]
 pub struct RedisSessionStore {
@@ -13,11 +14,14 @@ pub struct Session {
     pub credentials: String,
 }
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum StoreError {
+    #[error("io error ({0})")]
     Io(io::Error),
+    #[error("json deserialization error ({0})")]
     Json(serde_json::Error),
-    Redis(RedisError)
+    #[error("redis error ({0})")]
+    Redis( #[from] RedisError)
 }
 
 impl From<serde_json::Error> for StoreError {
@@ -31,22 +35,6 @@ impl From<serde_json::Error> for StoreError {
                 StoreError::Json(err)
             }
         }
-    }
-}
-
-impl std::fmt::Display for StoreError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            StoreError::Io(ioe) => write!(f, "io error ({})", ioe),
-            StoreError::Json(serde) => write!(f, "json deserialization error ({})", serde),
-            StoreError::Redis(re) => write!(f, "redis error ({})", re),
-        }
-    }
-}
-
-impl From<RedisError> for StoreError {
-    fn from(err: RedisError) -> Self {
-        StoreError::Redis(err)
     }
 }
 
