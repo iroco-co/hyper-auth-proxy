@@ -12,7 +12,7 @@
 //! They can be used "as is" or the credentials can be encoded (for example with AES).
 //!
 //! In that case, the proxy will make a request with `Authorization` header :
-//! ```
+//! ```bash
 //! Authorization: Bearer dXNlcjp0ZXN0
 //! ```
 //! The main should contain a tokio main section and call the run_service function.
@@ -24,11 +24,10 @@
 //!
 //! #[tokio::main]
 //! async fn main() {
-//!     env_logger::init();
 //!     let (_tx, rx) = tokio::sync::oneshot::channel::<()>();
 //!     let config = ProxyConfig::default();
 //!     let server = run_service(config.clone(), rx).await;
-//!     info!("Running auth proxy on {:?} with backend {:?}", config.address, config.back_uri);
+//!     println!("Running auth proxy on {:?} with backend {:?}", config.address, config.back_uri);
 //!     if let Err(e) = server.await {
 //!         eprintln!("server error: {}", e);
 //!     }
