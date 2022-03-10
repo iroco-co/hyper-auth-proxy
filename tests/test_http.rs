@@ -151,9 +151,9 @@ impl AsyncTestContext for ProxyTestContext {
     async fn setup() -> ProxyTestContext {
         let http_back: HttpTestContext = AsyncTestContext::setup().await;
         let (sender, receiver) = tokio::sync::oneshot::channel::<()>();
-        let ProxyConfig {key, redis_uri: _, back_uri: _, address} = ProxyConfig::from_address("127.0.0.1:54321");
+        let ProxyConfig { jwt_key, credentials_key, redis_uri: _, back_uri: _, address} = ProxyConfig::from_address("127.0.0.1:54321");
         let redis_uri = "redis://redis/1";
-        let config = ProxyConfig { key, redis_uri: redis_uri.to_string(), back_uri: format!("http://127.0.0.1:{}", http_back.port), address };
+        let config = ProxyConfig { jwt_key, credentials_key, redis_uri: redis_uri.to_string(), back_uri: format!("http://127.0.0.1:{}", http_back.port), address };
         let proxy_handler = tokio::spawn(run_service(config,receiver).await);
         ProxyTestContext {
             sender,

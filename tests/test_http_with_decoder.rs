@@ -13,6 +13,7 @@ use sha2::{Sha512};
 use sha2::digest::KeyInit;
 use jwt::{AlgorithmType, SignWithKey, Token};
 use jwt::header::PrecomputedAlgorithmOnlyHeader;
+use auth_proxy::errors::AuthProxyError;
 
 struct ProxyTestContext {
     sender: Sender<()>,
@@ -40,8 +41,8 @@ async fn test_get_with_auth_cookie_with_encoded_credentials(ctx: &mut ProxyTestC
     assert_eq!(200, resp.status());
 }
 
-fn b64_decode(s: &str) -> String {
-    String::from_utf8_lossy(&base64::decode(&s).unwrap()).to_string()
+fn b64_decode(s: &str, _k: &str) -> Result<String, AuthProxyError> {
+    Ok(String::from_utf8_lossy(&base64::decode(&s)?).to_string())
 }
 
 #[async_trait::async_trait]
@@ -49,9 +50,9 @@ impl AsyncTestContext for ProxyTestContext {
     async fn setup() -> ProxyTestContext {
         let http_back: HttpTestContext = AsyncTestContext::setup().await;
         let (sender, receiver) = tokio::sync::oneshot::channel::<()>();
-        let ProxyConfig {key, redis_uri: _, back_uri: _, address} = ProxyConfig::from_address("127.0.0.1:54321");
+        let ProxyConfig { jwt_key: key, credentials_key, redis_uri: _, back_uri: _, address} = ProxyConfig::from_address("127.0.0.1:54321");
         let redis_uri = "redis://redis/1";
-        let config = ProxyConfig { key, redis_uri: redis_uri.to_string(), back_uri: format!("http://127.0.0.1:{}", http_back.port), address };
+        let config = ProxyConfig { jwt_key: key, credentials_key, redis_uri: redis_uri.to_string(), back_uri: format!("http://127.0.0.1:{}", http_back.port), address };
         let proxy_handler = tokio::spawn(run_service_with_decoder(config, receiver, b64_decode).await);
         ProxyTestContext {
             sender,

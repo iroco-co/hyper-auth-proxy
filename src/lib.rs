@@ -30,7 +30,8 @@ static DOUBLE_QUOTES: &str = "\"";
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProxyConfig {
-    pub key: String,
+    pub jwt_key: String,
+    pub credentials_key: String,
     pub back_uri: String,
     pub redis_uri: String,
     pub address: SocketAddr,
@@ -38,15 +39,16 @@ pub struct ProxyConfig {
 
 impl ProxyConfig {
     pub fn from_address(address_str: &str) -> ProxyConfig {
-        let Self { key, back_uri, redis_uri, address: _ } = ProxyConfig::default();
-        Self { key, back_uri, redis_uri, address: address_str.parse().unwrap() }
+        let Self { jwt_key: key, credentials_key, back_uri, redis_uri, address: _ } = ProxyConfig::default();
+        Self { jwt_key: key, credentials_key, back_uri, redis_uri, address: address_str.parse().unwrap() }
     }
 }
 
 impl Default for ProxyConfig {
     fn default() -> Self {
         ProxyConfig {
-            key: "testsecretpourlestests".to_string(),
+            jwt_key: "testsecretpourlestests".to_string(),
+            credentials_key: "credentials_key".to_string(),
             back_uri: "http://127.0.0.1:5000".to_string(),
             redis_uri: "redis://redis".to_string(),
             address: "127.0.0.1:3000".parse().unwrap(),
@@ -83,18 +85,26 @@ fn set_basic_auth(req: &mut Request<Body>, credentials: String) {
 }
 
 async fn handle(client_ip: IpAddr, mut req: Request<Body>, store: Arc<RedisSessionStore>,
-                config: Arc<ProxyConfig>, decode_credentials: fn(&str) -> String) -> Result<Response<Body>, Infallible> {
+                config: Arc<ProxyConfig>, decode_credentials: fn(&str, &str) -> Result<String, AuthProxyError>) -> Result<Response<Body>, Infallible> {
     match get_auth_cookie(&req) {
         Ok(auth_cookie) => {
-            let key: Hmac<Sha512> = Hmac::new_from_slice(config.key.as_bytes()).unwrap();
+            let key: Hmac<Sha512> = Hmac::new_from_slice(config.jwt_key.as_bytes()).unwrap();
             match decode_token(auth_cookie.value().to_string(), key) {
                 Ok(session_token) => {
                     match store.get(session_token.sid.as_str()).await {
                         Ok(Some(session)) => {
-                            set_basic_auth(&mut req, decode_credentials(session.credentials.as_str()));
-                            match hyper_reverse_proxy::call(client_ip, config.back_uri.as_str(), req).await {
-                                Ok(response) => { Ok(response) }
-                                Err(_error) => {
+                            match decode_credentials(session.credentials.as_str(), config.credentials_key.as_str()) {
+                                Ok(credentials) => {
+                                    set_basic_auth(&mut req, credentials);
+                                    match hyper_reverse_proxy::call(client_ip, config.back_uri.as_str(), req).await {
+                                        Ok(response) => { Ok(response) }
+                                        Err(_error) => {
+                                            Ok(Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty()).unwrap())
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    debug!("credentials decode error {} for sid={}", e, session_token.sid);
                                     Ok(Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty()).unwrap())
                                 }
                             }
@@ -122,15 +132,15 @@ async fn handle(client_ip: IpAddr, mut req: Request<Body>, store: Arc<RedisSessi
     }
 }
 
-fn identity_fn_credentials(credentials: &str) -> String {
-    String::from(credentials)
+fn identity_fn_credentials(credentials: &str, _key_str: &str) -> Result<String, AuthProxyError> {
+    Ok(String::from(credentials))
 }
 
 pub async fn run_service(config: ProxyConfig, rx: Receiver<()>) -> impl Future<Output=Result<(), hyper::Error>> {
     run_service_with_decoder(config, rx, identity_fn_credentials).await
 }
 
-pub async fn run_service_with_decoder(config: ProxyConfig, rx: Receiver<()>, decode_credentials: fn(&str) -> String) -> impl Future<Output=Result<(), hyper::Error>> {
+pub async fn run_service_with_decoder(config: ProxyConfig, rx: Receiver<()>, decode_credentials: fn(&str, &str) -> Result<String, AuthProxyError>) -> impl Future<Output=Result<(), hyper::Error>> {
     let cloned_config = config.clone();
     let shared_config = Arc::new(config);
     let shared_store = Arc::new(RedisSessionStore::new(shared_config.redis_uri.to_owned()).unwrap());

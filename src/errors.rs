@@ -2,6 +2,7 @@ use base64::DecodeError;
 use jwt::Error as JwtError;
 use hyper::header::ToStrError;
 
+#[derive(Debug)]
 pub enum AuthProxyError {
     DecodeError(DecodeError),
     JwtError(JwtError),
