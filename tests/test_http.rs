@@ -145,6 +145,24 @@ async fn test_get_with_auth_cookie_with_jwt_token_and_redis_session_sends_reques
     assert_eq!(200, resp.status());
 }
 
+#[test_context(ProxyTestContext)]
+#[tokio::test]
+#[serial]
+async fn test_get_with_auth_cookie_with_quoted_jwt_token_and_redis_session_sends_request_to_back(ctx: &mut ProxyTestContext) {
+    let b64credentials = base64::encode("foo:bar").to_string();
+    let mut headers = HeaderMap::new();
+    headers.append("Authorization", format!("Basic {}", b64credentials).parse().unwrap());
+    ctx.http_back.add(HandlerBuilder::new("/back").headers(headers).status_code(StatusCode::OK).build());
+    ctx.redis.set("sid", Session { credentials: b64credentials.clone() }).await.unwrap();
+
+    let req = Request::builder()
+        .method(Method::GET)
+        .uri(Uri::from_static("http://127.0.0.1:54321/back"))
+        .header("Cookies", format!("Authorization={}", create_jwt_with_quotes("sid", b"testsecretpourlestests", true)))
+        .body(Body::empty()).unwrap();
+    let resp = Client::new().request(req).await.unwrap();
+    assert_eq!(200, resp.status());
+}
 
 #[async_trait::async_trait]
 impl AsyncTestContext for ProxyTestContext {
@@ -171,6 +189,10 @@ impl AsyncTestContext for ProxyTestContext {
 }
 
 fn create_jwt(sid: &str, secret: &[u8]) -> String {
+    create_jwt_with_quotes(sid, secret, false)
+}
+
+fn create_jwt_with_quotes(sid: &str, secret: &[u8], with_quotes: bool) -> String {
     let sub = "sub".to_string();
     let sid = sid.to_string();
     let iat = Utc::now().timestamp();
@@ -179,5 +201,11 @@ fn create_jwt(sid: &str, secret: &[u8]) -> String {
     let my_claims = SessionToken { iat, exp, sub, sid };
     let token = Token::new(PrecomputedAlgorithmOnlyHeader(AlgorithmType::Hs512), my_claims);
     let token_str:String = token.sign_with_key(&key).unwrap().into();
-    base64::encode(token_str)
+    let token_with_quotes = match with_quotes {
+        true => format!("\"{}\"", token_str),
+        false => token_str
+    };
+    let t = base64::encode(token_with_quotes);
+    println!("{}", t);
+    t
 }
