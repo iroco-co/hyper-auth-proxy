@@ -1,3 +1,53 @@
+//!
+//! Little auth proxy that can be used to add Basic auth header for a backend service
+//! that needs basic auth without having to send credentials base64 encoded on the web.
+//!
+//! It will use JWK token key sid field to seek for the credentials in a Redis instance.
+//! The credentials are stored in json :
+//!
+//! ```json
+//! { "credentials": "dXNlcjp0ZXN0" }
+//! ```
+//!
+//! They can be used "as is" or the credentials can be encoded (for example with AES).
+//!
+//! In that case, the proxy will make a request with `Authorization` header :
+//! ```
+//! Authorization: Bearer dXNlcjp0ZXN0
+//! ```
+//! The main should contain a tokio main section and call the run_service function.
+//!
+//! Example :
+//! ```rust,no_run
+//! use auth_proxy::run_service;
+//! use auth_proxy::ProxyConfig;
+//!
+//! #[tokio::main]
+//! async fn main() {
+//!     env_logger::init();
+//!     let (_tx, rx) = tokio::sync::oneshot::channel::<()>();
+//!     let config = ProxyConfig::default();
+//!     let server = run_service(config.clone(), rx).await;
+//!     info!("Running auth proxy on {:?} with backend {:?}", config.address, config.back_uri);
+//!     if let Err(e) = server.await {
+//!         eprintln!("server error: {}", e);
+//!     }
+//! }
+//!
+//! ```
+//!
+//! The proxy configuration contains the following parameters :
+//! ```rust,no_run
+//!  use std::net::SocketAddr;
+//!  struct ProxyConfig {
+//!     pub jwt_key: String,
+//!     pub credentials_key: String,
+//!     pub back_uri: String,
+//!     pub redis_uri: String,
+//!     pub address: SocketAddr,
+//! }
+//! ```
+
 #[macro_use]
 extern crate log;
 
@@ -141,10 +191,18 @@ fn identity_fn_credentials(credentials: &str, _key_str: &str) -> Result<String, 
     Ok(String::from(credentials))
 }
 
+/// Runs the proxy without credential decoder. The string in Redis credential field is used
+///  as `Authorization` header
 pub async fn run_service(config: ProxyConfig, rx: Receiver<()>) -> impl Future<Output=Result<(), hyper::Error>> {
     run_service_with_decoder(config, rx, identity_fn_credentials).await
 }
 
+/// Runs the proxy with a credential decoder function. It should be with the signature :
+/// ```rust,no_run
+/// use auth_proxy::errors::AuthProxyError;
+/// type F = fn(&str, &str) -> Result<String, AuthProxyError>;
+/// ```
+///
 pub async fn run_service_with_decoder(config: ProxyConfig, rx: Receiver<()>, decode_credentials: fn(&str, &str) -> Result<String, AuthProxyError>) -> impl Future<Output=Result<(), hyper::Error>> {
     let cloned_config = config.clone();
     let shared_config = Arc::new(config);
