@@ -10,6 +10,7 @@ use std::sync::Arc;
 use base64::decode;
 use hmac::Hmac;
 use hyper::{Body, Request, Response, Server, StatusCode};
+use hyper::http::HeaderValue;
 use hyper::server::conn::AddrStream;
 use hyper::service::{make_service_fn, service_fn};
 use jwt::{Header, Token, VerifyWithKey};
@@ -80,8 +81,12 @@ fn decode_token(token_str_from_header: String, key: Hmac<Sha512>) -> Result<Sess
     })
 }
 
-fn set_basic_auth(req: &mut Request<Body>, credentials: String) {
-    req.headers_mut().insert("Authorization", format!("Basic {}", credentials).parse().unwrap());
+fn set_basic_auth(req: &mut Request<Body>, credentials: &str) {
+    let mut header_value: String = "Basic ".to_owned() + credentials;
+    if header_value.ends_with("\n") {
+        header_value.pop();
+    }
+    req.headers_mut().insert("Authorization", HeaderValue::from_str(header_value.as_str()).unwrap());
 }
 
 async fn handle(client_ip: IpAddr, mut req: Request<Body>, store: Arc<RedisSessionStore>,
@@ -95,7 +100,7 @@ async fn handle(client_ip: IpAddr, mut req: Request<Body>, store: Arc<RedisSessi
                         Ok(Some(session)) => {
                             match decode_credentials(session.credentials.as_str(), config.credentials_key.as_str()) {
                                 Ok(credentials) => {
-                                    set_basic_auth(&mut req, credentials);
+                                    set_basic_auth(&mut req, credentials.as_str());
                                     match hyper_reverse_proxy::call(client_ip, config.back_uri.as_str(), req).await {
                                         Ok(response) => { Ok(response) }
                                         Err(_error) => {
@@ -157,7 +162,7 @@ pub async fn run_service_with_decoder(config: ProxyConfig, rx: Receiver<()>, dec
 
 #[cfg(test)]
 mod test {
-    use crate::ProxyConfig;
+    use crate::{ProxyConfig};
 
     #[test]
     fn build_from_uri() {
