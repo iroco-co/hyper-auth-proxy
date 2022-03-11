@@ -139,6 +139,8 @@ fn set_basic_auth(req: &mut Request<Body>, credentials: &str) {
     req.headers_mut().insert("Authorization", HeaderValue::from_str(header_value.as_str()).unwrap());
 }
 
+/// main handler processor for each request
+/// all the workflow is defined here
 async fn handle(client_ip: IpAddr, mut req: Request<Body>, store: Arc<RedisSessionStore>,
                 config: Arc<ProxyConfig>, decode_credentials: fn(&str, &str) -> Result<String, AuthProxyError>) -> Result<Response<Body>, Infallible> {
     match get_auth_cookie(&req) {
