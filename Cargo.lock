@@ -61,35 +61,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "auth-proxy"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "base64 0.20.0-alpha.1",
- "chrono",
- "cookie",
- "env_logger",
- "futures",
- "hmac",
- "hyper",
- "hyper-reverse-proxy",
- "jwt",
- "log",
- "redis",
- "rust-crypto",
- "serde",
- "serde_json",
- "serial_test",
- "sha2",
- "test-context",
- "thiserror",
- "tokio",
- "tokio-test",
- "tokiotest-httpserver",
-]
-
-[[package]]
 name = "autocfg"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -458,6 +429,35 @@ dependencies = [
  "tower-service",
  "tracing",
  "want",
+]
+
+[[package]]
+name = "hyper-auth-proxy"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "base64 0.20.0-alpha.1",
+ "chrono",
+ "cookie",
+ "env_logger",
+ "futures",
+ "hmac",
+ "hyper",
+ "hyper-reverse-proxy",
+ "jwt",
+ "log",
+ "redis",
+ "rust-crypto",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "sha2",
+ "test-context",
+ "thiserror",
+ "tokio",
+ "tokio-test",
+ "tokiotest-httpserver",
 ]
 
 [[package]]

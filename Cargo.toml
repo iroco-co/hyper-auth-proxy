@@ -1,11 +1,11 @@
 [package]
-name = "auth-proxy"
+name = "hyper-auth-proxy"
 version = "0.1.0"
 authors = ["Bruno Thomas <bthomas@iroco.fr>"]
 license = "AGPL"
 description = "A simple auth reverse proxy, to authenticate via simple auth from a redis store."
 repository = "https://github.com/iroco-co/auth-proxy"
-keywords = ["http", "hyper"]
+keywords = ["http", "hyper", "proxy"]
 categories = ["network-programming", "web-programming"]
 readme = "README.md"
 edition = "2018"
