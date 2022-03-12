@@ -1159,9 +1159,9 @@ dependencies = [
 
 [[package]]
 name = "tokiotest-httpserver"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0eba3a7d4a769774bd007258c789261344d20b97755cc9dcad9f59eb08b53c47"
+checksum = "7b35dd4080d8a8182d5f38889230cfe0199958df933cad3fee4d43daa1b3e182"
 dependencies = [
  "async-trait",
  "futures",
