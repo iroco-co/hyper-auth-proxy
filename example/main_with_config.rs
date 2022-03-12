@@ -2,7 +2,7 @@
 extern crate log;
 
 use structopt::StructOpt;
-use auth_proxy::{ProxyConfig, run_service_with_decoder};
+use hyper_auth_proxy::{ProxyConfig, run_service_with_decoder};
 use crate::aes::aes_decode;
 
 /// simple auth proxy

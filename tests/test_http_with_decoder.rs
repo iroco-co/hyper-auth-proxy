@@ -1,7 +1,8 @@
-use tokiotest_httpserver::HttpTestContext;
-use auth_proxy::{ProxyConfig, SessionToken, run_service_with_decoder};
 use serial_test::serial;
-use auth_proxy::redis_session::{RedisSessionStore, Session};
+use tokiotest_httpserver::HttpTestContext;
+use hyper_auth_proxy::{ProxyConfig, SessionToken, run_service_with_decoder};
+use hyper_auth_proxy::redis_session::{RedisSessionStore, Session};
+use hyper_auth_proxy::errors::AuthProxyError;
 use hyper::{Body, Client, HeaderMap, Method, Request, StatusCode, Uri};
 use tokiotest_httpserver::handler::HandlerBuilder;
 use test_context::{AsyncTestContext, test_context};
@@ -13,7 +14,6 @@ use sha2::{Sha512};
 use sha2::digest::KeyInit;
 use jwt::{AlgorithmType, SignWithKey, Token};
 use jwt::header::PrecomputedAlgorithmOnlyHeader;
-use auth_proxy::errors::AuthProxyError;
 
 struct ProxyTestContext {
     sender: Sender<()>,

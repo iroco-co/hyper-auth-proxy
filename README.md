@@ -27,8 +27,7 @@ A proxy to do http basic auth from a JWT token and redis session credentials
 
  Example :
  ```rust,no_run
- use auth_proxy::run_service;
- use auth_proxy::ProxyConfig;
+ use hyper_auth_proxy::{run_service, ProxyConfig};
 
  #[tokio::main]
  async fn main() {

@@ -152,7 +152,7 @@ pub async fn run_service(config: ProxyConfig, rx: Receiver<()>) -> impl Future<O
 
 /// Runs the proxy with a credential decoder function. It should be with the signature :
 /// ```rust,no_run
-/// use auth_proxy::errors::AuthProxyError;
+/// use hyper_auth_proxy::errors::AuthProxyError;
 /// type F = fn(&str, &str) -> Result<String, AuthProxyError>;
 /// ```
 ///

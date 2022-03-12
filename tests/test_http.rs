@@ -15,8 +15,8 @@ use tokio::task::JoinHandle;
 use tokiotest_httpserver::handler::HandlerBuilder;
 use tokiotest_httpserver::HttpTestContext;
 
-use auth_proxy::{ProxyConfig, run_service, SessionToken};
-use auth_proxy::redis_session::{RedisSessionStore, Session};
+use hyper_auth_proxy::{ProxyConfig, run_service, SessionToken};
+use hyper_auth_proxy::redis_session::{RedisSessionStore, Session};
 
 
 struct ProxyTestContext {
