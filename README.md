@@ -10,8 +10,8 @@ A proxy to do http basic auth from a JWT token and redis session credentials
  that can be used to add Basic auth header for a backend service
  without having to send credentials base64 encoded on the web.
 
- It will use JWK token key `sid` field to seek for the credentials in a Redis instance.
- The credentials are stored in json :
+ It will use JWK token key `sid` field to seek for the credentials in a Redis instance. The JWT token is read from `Authorization`
+cookie. The credentials are stored in json :
 
  ```json
  { "credentials": "dXNlcjp0ZXN0" }
