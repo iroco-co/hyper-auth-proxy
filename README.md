@@ -5,6 +5,7 @@ A proxy to do http basic auth from a JWT token and redis session credentials
 
 ![schema](doc/auth_token.drawio.png)
 
+## usage
 
  Little auth proxy based on [hyper-reverse-proxy](https://github.com/felipenoris/hyper-reverse-proxy)
  that can be used to add Basic auth header for a backend service
@@ -53,3 +54,20 @@ cookie. The credentials are stored in json :
      pub address: SocketAddr,
  }
  ```
+
+## logging && debugging
+
+It uses log API so [for example](example/main_with_config.rs) with [env_logger](https://docs.rs/env_logger) it can be launched with 
+
+```shell
+$ RUST_LOG=debug hyper-auth-proxy
+```
+
+And you should have logs like : 
+
+```shell
+[2022-03-16T12:51:26Z INFO  my_auth_proxy] Running auth proxy on 127.0.0.1:3000 with backend "http://backend"
+[2022-03-16T12:51:33Z DEBUG hyper_auth_proxy] cannot find auth cookie: no cookies header
+[2022-03-16T12:53:21Z DEBUG hyper_auth_proxy] cannot find auth cookie: no auth cookie
+[2022-03-16T12:53:35Z DEBUG hyper_auth_proxy] cannot decode jwt token: cannot decode jwt token (No claims component found in token string)
+```
