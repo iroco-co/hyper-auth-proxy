@@ -1,6 +1,6 @@
 [package]
 name = "hyper-auth-proxy"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Bruno Thomas <bthomas@iroco.fr>"]
 license = "AGPL-3.0-or-later"
 description = "A simple auth reverse proxy, to authenticate via basic auth from a redis store."
