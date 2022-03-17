@@ -43,7 +43,7 @@ async fn test_get_without_auth_cookie_returns_401(proxy: &mut ProxyTestContext) 
     let req = Request::builder()
         .method(Method::GET)
         .uri(proxy_uri)
-        .header("Cookies", "foo:bar")
+        .header("Cookie", "foo:bar")
         .body(Body::empty()).unwrap();
     let resp = Client::new().request(req).await.unwrap();
     assert_eq!(401, resp.status());
@@ -57,7 +57,7 @@ async fn test_get_with_auth_cookie_not_base64_encoded_returns_401(proxy: &mut Pr
     let req = Request::builder()
         .method(Method::GET)
         .uri(proxy_uri)
-        .header("Cookies", "Authorization=not_base64")
+        .header("Cookie", "Authorization=not_base64")
         .body(Body::empty()).unwrap();
     let resp = Client::new().request(req).await.unwrap();
     assert_eq!(401, resp.status());
@@ -71,7 +71,7 @@ async fn test_get_with_auth_cookie_not_jwt_returns_401(proxy: &mut ProxyTestCont
     let req = Request::builder()
         .method(Method::GET)
         .uri(proxy_uri)
-        .header("Cookies", format!("Authorization={}", encode("foo:bar")))
+        .header("Cookie", format!("Authorization={}", encode("foo:bar")))
         .body(Body::empty()).unwrap();
     let resp = Client::new().request(req).await.unwrap();
     assert_eq!(401, resp.status());
@@ -90,7 +90,7 @@ async fn test_get_with_auth_cookie_with_malformed_jwt_token_returns_401(proxy: &
     let req = Request::builder()
         .method(Method::GET)
         .uri(proxy_uri)
-        .header("Cookies", format!("Authorization={}", encode(token_str)))
+        .header("Cookie", format!("Authorization={}", encode(token_str)))
         .body(Body::empty()).unwrap();
     let resp = Client::new().request(req).await.unwrap();
     assert_eq!(401, resp.status());
@@ -105,7 +105,7 @@ async fn test_get_with_auth_cookie_with_jwt_token_with_wrong_signature_returns_4
     let req = Request::builder()
         .method(Method::GET)
         .uri(proxy_uri)
-        .header("Cookies", format!("Authorization={}", create_jwt("sid", b"bad secret")))
+        .header("Cookie", format!("Authorization={}", create_jwt("sid", b"bad secret")))
         .body(Body::empty()).unwrap();
     let resp = Client::new().request(req).await.unwrap();
     assert_eq!(401, resp.status());
@@ -120,7 +120,7 @@ async fn test_get_with_auth_cookie_with_jwt_token_without_redis_session_returns_
     let req = Request::builder()
         .method(Method::GET)
         .uri(proxy_uri)
-        .header("Cookies", format!("Authorization={}", create_jwt("sid", b"testsecretpourlestests")))
+        .header("Cookie", format!("Authorization={}", create_jwt("sid", b"testsecretpourlestests")))
         .body(Body::empty()).unwrap();
     let resp = Client::new().request(req).await.unwrap();
     assert_eq!(401, resp.status());
@@ -139,7 +139,7 @@ async fn test_get_with_auth_cookie_with_jwt_token_and_redis_session_sends_reques
     let req = Request::builder()
         .method(Method::GET)
         .uri(Uri::from_static("http://127.0.0.1:54321/back"))
-        .header("Cookies", format!("Authorization={}", create_jwt("sid", b"testsecretpourlestests")))
+        .header("Cookie", format!("Authorization={}", create_jwt("sid", b"testsecretpourlestests")))
         .body(Body::empty()).unwrap();
     let resp = Client::new().request(req).await.unwrap();
     assert_eq!(200, resp.status());
@@ -158,7 +158,7 @@ async fn test_get_with_auth_cookie_with_quoted_jwt_token_and_redis_session_sends
     let req = Request::builder()
         .method(Method::GET)
         .uri(Uri::from_static("http://127.0.0.1:54321/back"))
-        .header("Cookies", format!("Authorization={}", create_jwt_with_quotes("sid", b"testsecretpourlestests", true)))
+        .header("Cookie", format!("Authorization={}", create_jwt_with_quotes("sid", b"testsecretpourlestests", true)))
         .body(Body::empty()).unwrap();
     let resp = Client::new().request(req).await.unwrap();
     assert_eq!(200, resp.status());

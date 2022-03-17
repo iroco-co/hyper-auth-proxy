@@ -26,7 +26,7 @@ fn find_from_header<'a>(cookie_header: &'a str, name: &'a str) -> Option<Cookie<
 }
 
 fn get_cookies(req: &Request<Body>) -> Result<&HeaderValue, AuthProxyError> {
-    match req.headers().get("Cookies") {
+    match req.headers().get("Cookie") {
         Some(header) => Ok(header),
         None => Err(AuthProxyError::NoCookiesHeader())
     }

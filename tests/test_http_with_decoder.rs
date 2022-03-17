@@ -35,7 +35,7 @@ async fn test_get_with_auth_cookie_with_encoded_credentials(ctx: &mut ProxyTestC
     let req = Request::builder()
         .method(Method::GET)
         .uri(Uri::from_static("http://127.0.0.1:54321/back"))
-        .header("Cookies", format!("Authorization={}", create_jwt("sid", b"testsecretpourlestests")))
+        .header("Cookie", format!("Authorization={}", create_jwt("sid", b"testsecretpourlestests")))
         .body(Body::empty()).unwrap();
     let resp = Client::new().request(req).await.unwrap();
     assert_eq!(200, resp.status());
